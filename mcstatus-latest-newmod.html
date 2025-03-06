@@ -1,0 +1,197 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Server Status</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link id="favicon" rel="icon" type="image/png" href="favicon.ico">
+    <style>
+        .mc-bold { font-weight: bold; }
+        .mc-strike { text-decoration: line-through; }
+        .mc-underline { text-decoration: underline; }
+        .mc-italic { font-style: italic; }
+        .mc-0 { color: #000000; }
+        .mc-1 { color: #0000AA; }
+        .mc-2 { color: #00AA00; }
+        .mc-3 { color: #00AAAA; }
+        .mc-4 { color: #AA0000; }
+        .mc-5 { color: #AA00AA; }
+        .mc-6 { color: #FFAA00; }
+        .mc-7 { color: #AAAAAA; }
+        .mc-8 { color: #555555; }
+        .mc-9 { color: #5555FF; }
+        .mc-a { color: #55FF55; }
+        .mc-b { color: #55FFFF; }
+        .mc-c { color: #FF5555; }
+        .mc-d { color: #FF55FF; }
+        .mc-e { color: #FFFF55; }
+        .mc-f { color: #FFFFFF; }
+        .search-container.expanded {
+            width: 300px;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+        }
+        .search-container {
+            transition: width 0.3s ease, padding 0.3s ease;
+            width: 48px;
+            height: 48px;
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            outline: 2px solid #354a75;
+            border-radius: 50%;
+        }
+        .search-container input {
+            flex-grow: 1;
+            margin: 0 8px;
+        }
+        .search-container button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 48px;
+            height: 48px;
+            padding: 0;
+        }
+        .search-container button i {
+            font-size: 24px;
+            line-height: 1;
+            color: #09f97d;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex justify-center items-center h-screen relative">
+    <div class="absolute top-4 right-4">
+        <div id="searchBar" class="search-container bg-gray-800 rounded-full shadow-lg">
+            <button id="searchButton" class="p-2 text-white">
+                <i class="material-icons">search</i>
+            </button>
+            <input id="serverInput" type="text" placeholder="Enter server..." class="p-2 text-black rounded-lg hidden" />
+        </div>
+    </div>
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg text-center">
+        <div id="serverIcon" class="mb-4"></div>
+        <p id="serverName" class="text-sm text-gray-400 hidden"></p>
+        <h1 class="text-3xl font-bold mb-4">Minecraft Server Status</h1>
+        <p id="status" class="text-lg">Checking server...</p>
+        <p id="version" class="text-lg"></p>
+        <div id="motd" class="text-lg"></div>
+        <p id="players" class="text-lg"></p>
+        <ul id="playerList" class="text-lg list-none"></ul>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            function getQueryParam(name) {
+                const urlParams = new URLSearchParams(window.location.search);
+                return urlParams.get(name) || "mc.petroid.xyz";
+            }
+
+            let server = getQueryParam("server");
+
+            if (server !== "mc.petroid.xyz") {
+                document.getElementById("serverName").textContent = `Server: ${server}`;
+                document.getElementById("serverName").classList.remove("hidden");
+            }
+
+            const searchBar = document.getElementById("searchBar");
+            const searchInput = document.getElementById("serverInput");
+            const searchButton = document.getElementById("searchButton");
+
+            searchButton.addEventListener("click", () => {
+                searchBar.classList.add("expanded");
+                searchInput.classList.remove("hidden");
+                searchInput.focus();
+            });
+
+            function updateServer() {
+                const newServer = searchInput.value.trim();
+                if (newServer) {
+                    window.location.search = `?server=${newServer}`;
+                }
+            }
+
+            searchInput.addEventListener("keydown", (event) => {
+                if (event.key === "Enter") {
+                    updateServer();
+                }
+            });
+
+            function parseMotd(motd) {
+                if (!motd) return "";
+                let formattedMotd = motd.replace(/\u00a7([0-9a-f])/g, (match, code) => {
+                    return `</span><span class="mc-${code}">`;
+                }).replace(/\u00a7l/g, '<span class="mc-bold">')
+                    .replace(/\u00a7m/g, '<span class="mc-strike">')
+                    .replace(/\u00a7n/g, '<span class="mc-underline">')
+                    .replace(/\u00a7o/g, '<span class="mc-italic">')
+                    .replace(/\u00a7r/g, '</span>');
+                // Parse any hex code
+                formattedMotd = formattedMotd.replace(/\u00a7#([0-9a-fA-F]{6})/g, (match, hex) => {
+                    return `</span><span style="color: #${hex};">`;
+                }) + '</span>';
+                return formattedMotd.startsWith('</span>') ? formattedMotd.slice(7) : formattedMotd;
+            }
+
+            async function fetchServerStatus() {
+                try {
+                    const response = await axios.get(`https://api.mcsrvstat.us/2/${server}`);
+                    const data = response.data;
+                    console.log("Server Response:", data);
+
+                    if (data.online) {
+                        document.getElementById('status').innerHTML = `<span class='text-green-400'>Online</span>`;
+                        document.getElementById('version').innerHTML = `Version: ${data.version}`;
+                        document.getElementById('motd').innerHTML = `MOTD: ${parseMotd(data.motd.raw.join(' '))}`;
+                        document.getElementById('players').innerHTML = `Players: ${data.players.online} / ${data.players.max}`;
+
+                        const playerList = document.getElementById('playerList');
+                        playerList.innerHTML = "";
+                        if (data.players.list) {
+                            data.players.list.forEach(player => {
+                                let li = document.createElement("li");
+                                li.classList.add("flex", "items-center", "gap-2", "mb-2");
+                                let img = document.createElement("img");
+                                img.src = `https://minotar.net/avatar/${player}/32`;
+                                img.alt = player;
+                                img.classList.add("border", "border-white");
+                                li.appendChild(img);
+                                let span = document.createElement("span");
+                                span.textContent = player;
+                                li.appendChild(span);
+                                playerList.appendChild(li);
+                            });
+                        }
+                        if (data.icon) {
+                            document.getElementById('serverIcon').innerHTML = `<img src="${data.icon}" alt="Server Icon" class="w-24 h-24 mx-auto">`;
+                            let favicon = document.getElementById("favicon");
+                            favicon.href = data.icon;
+                        } else {
+                            document.getElementById('serverIcon').innerHTML = '';
+                        }
+                    } else {
+                        document.getElementById('status').innerHTML = `<span class='text-red-400'>Offline</span>`;
+                        document.getElementById('version').innerHTML = '';
+                        document.getElementById('motd').innerHTML = '';
+                        document.getElementById('players').innerHTML = '';
+                        document.getElementById('playerList').innerHTML = '';
+                        document.getElementById('serverIcon').innerHTML = '';
+                    }
+                } catch (error) {
+                    console.error("Error fetching server status:", error);
+                    document.getElementById('status').innerHTML = `<span class='text-yellow-400'>Error fetching status</span>`;
+                }
+            }
+
+            fetchServerStatus();
+            setInterval(fetchServerStatus, 30000);
+        });
+    </script>
+</body>
+</html>
