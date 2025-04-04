@@ -87,13 +87,30 @@
     </div>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // Configuration
+            const DEFAULT_SERVER = "hypixel.net"; // Change this value to set the default server
+            
+            // Display states: 0 = disabled, 1 = show on non-default only, 2 = show always
+            const SHOW_SERVER_IP = 0; // Controls server IP display
+            const ENABLE_SEARCH = 0; // Controls search functionality
+
+            // Redirect to default page if search is disabled and URL has parameters
+            if (ENABLE_SEARCH === 0 && window.location.search !== '') {
+                window.location.replace(window.location.pathname);
+                return;
+            }
+
             function getQueryParam(name) {
+                // When search is disabled, always return default server
+                if (ENABLE_SEARCH === 0) {
+                    return DEFAULT_SERVER;
+                }
                 const urlParams = new URLSearchParams(window.location.search);
-                return urlParams.get(name) || "hypixel.net"; //Change hypixel.net for your default IP
+                return urlParams.get(name) || DEFAULT_SERVER;
             }
 
             let server = getQueryParam("server");
-            if (server !== "hypixel.net") { //Change hypixel.net for your default IP
+            if (SHOW_SERVER_IP === 2 || (SHOW_SERVER_IP === 1 && server !== DEFAULT_SERVER)) {
                 document.getElementById("serverName").textContent = `Server: ${server}`;
                 document.getElementById("serverName").classList.remove("hidden");
             }
@@ -102,24 +119,30 @@
             const searchInput = document.getElementById("serverInput");
             const searchButton = document.getElementById("searchButton");
 
-            searchButton.addEventListener("click", () => {
-                searchBar.classList.add("expanded");
-                searchInput.classList.remove("hidden");
-                searchInput.focus();
-            });
+            if (ENABLE_SEARCH === 0) {
+                searchBar.style.display = 'none';
+            } else if (ENABLE_SEARCH === 1 && server === DEFAULT_SERVER) {
+                searchBar.style.display = 'none';
+            } else {
+                searchButton.addEventListener("click", () => {
+                    searchBar.classList.add("expanded");
+                    searchInput.classList.remove("hidden");
+                    searchInput.focus();
+                });
 
-            function updateServer() {
-                const newServer = searchInput.value.trim();
-                if (newServer) {
-                    window.location.search = `?server=${newServer}`;
+                function updateServer() {
+                    const newServer = searchInput.value.trim();
+                    if (newServer) {
+                        window.location.search = `?server=${newServer}`;
+                    }
                 }
+
+                searchInput.addEventListener("keydown", (event) => {
+                    if (event.key === "Enter") {
+                        updateServer();
+                    }
+                });
             }
-
-            searchInput.addEventListener("keydown", (event) => {
-                if (event.key === "Enter") {
-                    updateServer();
-                }
-            });
 
             function parseMotd(motd) {
                 if (!motd) return "";
@@ -130,7 +153,6 @@
                     .replace(/\u00a7n/g, '<span class="mc-underline">')
                     .replace(/\u00a7o/g, '<span class="mc-italic">')
                     .replace(/\u00a7r/g, '</span>');
-                // Parse any hex code
                 formattedMotd = formattedMotd.replace(/\u00a7#([0-9a-fA-F]{6})/g, (match, hex) => {
                     return `</span><span style="color: #${hex};">`;
                 }) + '</span>';
@@ -139,7 +161,7 @@
 
             async function fetchServerStatus() {
                 try {
-                    const response = await axios.get(`https://api.mcsrvstat.us/2/${server}`);
+                    const response = await axios.get(`https://api.mcsrvstat.us/3/${server}`);
                     const data = response.data;
                     console.log("Server Response:", data);
 
